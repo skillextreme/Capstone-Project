@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment variables
+.env
+
+# Data (don't commit datasets)
+data/raw/*
+data/summaries/*
+data/intermediate/*
+data/outputs/*
+
+# But keep the directory structure
+!data/raw/.gitkeep
+!data/summaries/.gitkeep
+!data/intermediate/.gitkeep
+!data/outputs/.gitkeep
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Models (large files)
+*.pkl
+*.joblib
+*.h5
+*.pt
+*.pth

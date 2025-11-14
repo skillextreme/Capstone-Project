@@ -1,0 +1,32 @@
+# Core data processing
+pandas>=2.0.0
+numpy>=1.24.0
+pyarrow>=12.0.0  # For parquet support
+
+# Machine learning
+scikit-learn>=1.3.0
+xgboost>=2.0.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+plotly>=5.14.0
+
+# LLM Integration (optional - for intelligent agents)
+openai>=1.0.0
+anthropic>=0.18.0
+
+# Configuration and utilities
+pyyaml>=6.0
+python-dotenv>=1.0.0
+tqdm>=4.65.0
+
+# Logging and monitoring
+colorlog>=6.7.0
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# Data validation
+jsonschema>=4.17.0

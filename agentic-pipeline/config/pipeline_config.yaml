@@ -1,0 +1,226 @@
+# Agentic Pipeline Configuration
+# This file controls the behavior of all 4 stages
+
+# =============================================================================
+# DATA PATHS
+# =============================================================================
+data:
+  raw_dir: "data/raw"
+  summaries_dir: "data/summaries"
+  intermediate_dir: "data/intermediate"
+  outputs_dir: "data/outputs"
+
+# =============================================================================
+# STAGE 1: SUMMARIZER
+# =============================================================================
+summarizer:
+  # Number of rows to sample for type inference (set to null to use all rows)
+  sample_size: 1000
+
+  # Flag columns with more than this fraction of nulls
+  null_threshold: 0.95
+
+  # Treat column as numeric if at least this fraction of rows parse as numbers
+  numeric_threshold: 0.95
+
+  # Minimum cardinality to consider as a categorical column
+  min_categorical_cardinality: 2
+  max_categorical_cardinality: 100
+
+  # For categorical columns, how many top values to include in summary
+  top_k_values: 10
+
+  # Candidate key detection: minimum uniqueness ratio (unique values / total rows)
+  key_uniqueness_threshold: 0.95
+
+  # Common key column names to look for
+  common_keys:
+    - state
+    - year
+    - crop
+    - district
+    - season
+    - month
+
+# =============================================================================
+# STAGE 2: TASK SUGGESTER
+# =============================================================================
+task_suggester:
+  # LLM settings (if using AI-powered suggestions)
+  llm:
+    provider: "anthropic"  # or "openai" or "none" for rule-based
+    model: "claude-3-5-sonnet-20241022"
+    temperature: 0.7
+    max_tokens: 4000
+
+  # Rule-based task suggestion settings
+  rules:
+    # Minimum number of files required for join-based tasks
+    min_files_for_join: 2
+
+    # Minimum overlap (Jaccard similarity) of keys between files to suggest join
+    min_key_overlap: 0.5
+
+    # Maximum number of task suggestions to generate
+    max_suggestions: 5
+
+# =============================================================================
+# STAGE 3: PLANNER
+# =============================================================================
+planner:
+  # Join strategy
+  join_type: "left"  # Options: inner, left, right, outer
+
+  # Drop rows with more than this fraction of missing values after join
+  drop_na_threshold: 0.5
+
+  # Key normalization rules (maps variants to standard form)
+  key_normalizations:
+    state:
+      "UP": "Uttar Pradesh"
+      "U.P.": "Uttar Pradesh"
+      "Delhi NCR": "Delhi"
+      "TN": "Tamil Nadu"
+      "T.N.": "Tamil Nadu"
+      "AP": "Andhra Pradesh"
+      "A.P.": "Andhra Pradesh"
+      "HP": "Himachal Pradesh"
+      "H.P.": "Himachal Pradesh"
+      "MP": "Madhya Pradesh"
+      "M.P.": "Madhya Pradesh"
+
+    crop:
+      "Rice": "rice"
+      "RICE": "rice"
+      "Wheat": "wheat"
+      "WHEAT": "wheat"
+      "Sugarcane": "sugarcane"
+      "Sugar Cane": "sugarcane"
+
+  # Feature engineering settings
+  features:
+    # Create lagged variables (previous year's values)
+    create_lags: true
+    lag_periods: [1, 2]  # Previous 1 and 2 years
+
+    # Create rolling statistics
+    create_rolling: true
+    rolling_windows: [3, 5]  # 3-year and 5-year windows
+
+    # Create interaction features
+    create_interactions: false
+
+    # Create polynomial features
+    create_polynomials: false
+
+  # Outlier handling
+  outliers:
+    method: "iqr"  # Options: iqr, zscore, none
+    iqr_multiplier: 1.5
+    zscore_threshold: 3.0
+    handle_method: "cap"  # Options: cap, remove, none
+
+# =============================================================================
+# STAGE 4: EXECUTOR
+# =============================================================================
+executor:
+  # Train/test split
+  split:
+    method: "time"  # Options: time, random
+    test_split_year: 2020  # For time-based: train on <=2020, test on >2020
+    test_size: 0.2  # For random split: fraction for test set
+    random_seed: 42
+
+  # Models to train
+  models:
+    linear_regression:
+      enabled: true
+      regularization: "ridge"  # Options: ridge, lasso, elasticnet
+      alpha: 1.0
+
+    gradient_boosting:
+      enabled: true
+      library: "xgboost"  # Options: xgboost, lightgbm
+      n_estimators: 100
+      max_depth: 6
+      learning_rate: 0.1
+      subsample: 0.8
+
+    random_forest:
+      enabled: false
+      n_estimators: 100
+      max_depth: 10
+
+  # Cross-validation
+  cross_validation:
+    enabled: true
+    cv_folds: 5
+    scoring: "neg_mean_absolute_error"
+
+  # Feature importance
+  feature_importance:
+    enabled: true
+    plot_top_n: 20
+
+  # Visualization settings
+  visualization:
+    dpi: 300
+    figsize: [12, 8]
+    style: "seaborn-v0_8-darkgrid"
+
+    plots:
+      actual_vs_predicted: true
+      residuals_by_segment: true
+      time_series: true
+      feature_importance: true
+      error_distribution: true
+
+# =============================================================================
+# VERIFICATION
+# =============================================================================
+verification:
+  # V1: Schema check (after Stage 1)
+  v1:
+    enabled: true
+    check_column_names: true
+    check_types: true
+    check_ranges: true
+    check_nulls: true
+
+  # V3: Join and leakage checks (after Stage 3)
+  v3:
+    enabled: true
+    check_join_cardinality: true
+    check_coverage: true
+    check_leakage: true
+    min_coverage: 0.8  # Warn if <80% rows retained after join
+
+  # V4: Metrics check (after Stage 4)
+  v4:
+    enabled: true
+    check_metrics: true
+    check_residuals: true
+    check_transparency: true
+
+  # Global verification settings
+  fail_on_warning: false  # Continue pipeline even if warnings are raised
+  fail_on_error: false  # Continue pipeline even if errors are raised (not recommended)
+
+# =============================================================================
+# LOGGING
+# =============================================================================
+logging:
+  level: "INFO"  # Options: DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+  # Log files
+  file:
+    enabled: true
+    path: "logs/pipeline.log"
+    max_bytes: 10485760  # 10 MB
+    backup_count: 5
+
+  # Console output
+  console:
+    enabled: true
+    colorize: true
