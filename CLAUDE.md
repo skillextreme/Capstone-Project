@@ -4,10 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is a capstone project containing two main components:
+This is a capstone project containing three main components:
 
 1. **Agentic Pipeline** (`Capstone-Project/agentic-pipeline/`) - A 4-stage agricultural data analysis pipeline
-2. **Local Deep Research** (`Capstone-Project/local-deep-research/`) - A LangGraph-based deep research agent
+2. **LLM Agent** (`Capstone-Project/llm-agent/`) - **NEW!** Conversational LLM agent that orchestrates the pipeline through natural language
+3. **Local Deep Research** (`Capstone-Project/local-deep-research/`) - A LangGraph-based deep research agent
 
 ## Agentic Pipeline
 
@@ -112,6 +113,124 @@ data/outputs/ ← Stage 4 ← data/intermediate/ ← Stage 3
 - Models: Ridge regression and XGBoost (configurable in pipeline_config.yaml)
 - Parquet format for intermediate storage (efficient compression)
 - Stage 1 can sample large files (set `sample_size` in config)
+
+## LLM Agent (NEW!)
+
+### Purpose
+A conversational AI agent that allows users to interact with the 4-stage agentic pipeline through natural language. Built with **LangGraph** and **LangChain**, users can chat with an LLM that autonomously calls the appropriate pipeline tools.
+
+### Development Commands
+
+```bash
+# Navigate to the LLM agent directory
+cd "Capstone-Project/llm-agent"
+
+# Setup virtual environment
+python3 -m venv venv
+source venv/bin/activate  # On Linux/macOS
+
+# Install dependencies
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# Setup API keys
+cp .env.example .env
+# Edit .env and add ANTHROPIC_API_KEY or OPENAI_API_KEY
+
+# Run interactive mode
+python main.py
+
+# Run single query
+python main.py --query "Analyze my data and suggest tasks"
+
+# Use specific model
+python main.py --model gpt-4o
+```
+
+### Architecture
+
+LangGraph-based agent with ReAct (Reasoning + Acting) pattern:
+
+**Main Components:**
+- `src/agent.py`: LangGraph agent with tool calling
+- `src/tools.py`: 8 tools wrapping pipeline stages
+- `src/states.py`: State management (conversation + pipeline state)
+- `src/prompts.py`: System prompts and guidance
+- `src/configs.py`: Configuration management
+- `main.py`: CLI interface (interactive or single query)
+
+**Available Tools:**
+1. `list_data_files` - List available data files
+2. `summarize_data` - Run Stage 1 (Summarizer)
+3. `suggest_tasks` - Run Stage 2 (Task Suggester)
+4. `plan_analysis` - Run Stage 3 (Planner)
+5. `execute_analysis` - Run Stage 4 (Executor)
+6. `view_summary` - View file summaries
+7. `view_tasks` - View task suggestions
+8. `view_results` - View analysis results
+
+**Agent Workflow:**
+```
+User Query (natural language)
+  ↓
+LLM Agent analyzes request
+  ↓
+Agent decides which tool(s) to call
+  ↓
+Tools execute (interact with pipeline)
+  ↓
+Results returned to agent
+  ↓
+Agent formulates response
+  ↓
+User receives natural language response
+```
+
+**Example Conversation:**
+```
+You: What data files do I have?
+Agent: [calls list_data_files]
+      You have 3 files: crop_yield.csv, rainfall.csv, fertilizer_usage.csv
+
+You: Analyze them and predict crop yields
+Agent: [calls summarize_data → suggest_tasks → plan_analysis → execute_analysis]
+      ✓ Analysis complete! The XGBoost model achieved R²=0.87...
+```
+
+### Integration with Agentic Pipeline
+
+The LLM agent wraps the existing 4-stage pipeline:
+- **No modification** to pipeline code required
+- Tools import and call pipeline stages directly
+- Data flows through normal pipeline directories
+- Can be used alongside or instead of manual pipeline execution
+
+**Data Flow:**
+```
+llm-agent/src/tools.py
+  ↓ (imports)
+agentic-pipeline/src/stage{1,2,3,4}/
+  ↓ (reads/writes)
+agentic-pipeline/data/
+```
+
+### Key Features
+
+- **Natural Language Interface**: Chat instead of running commands
+- **Autonomous Tool Calling**: Agent selects appropriate tools
+- **Multi-Step Planning**: Agent can execute complex workflows
+- **Error Handling**: Graceful recovery with user guidance
+- **Streaming**: See agent thinking in real-time
+- **Model Flexibility**: Works with Claude or GPT models
+- **Stateful**: Maintains conversation context
+
+### Important Notes
+
+- Requires agentic pipeline to be set up first
+- Needs at least one LLM API key (Anthropic or OpenAI)
+- Data files must be in `../agentic-pipeline/data/raw/`
+- Can run in separate virtual environment from pipeline
+- See `llm-agent/README.md` for detailed documentation
 
 ## Local Deep Research Agent
 
