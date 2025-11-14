@@ -1,0 +1,189 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Repository Overview
+
+This is a capstone project containing two main components:
+
+1. **Agentic Pipeline** (`Capstone-Project/agentic-pipeline/`) - A 4-stage agricultural data analysis pipeline
+2. **Local Deep Research** (`Capstone-Project/local-deep-research/`) - A LangGraph-based deep research agent
+
+## Agentic Pipeline
+
+### Purpose
+A stateless, verifiable 4-stage pipeline for analyzing agricultural datasets (crop yields, rainfall, inputs) with automated verification at each checkpoint.
+
+### Development Commands
+
+```bash
+# Navigate to the pipeline directory
+cd "Capstone-Project/agentic-pipeline"
+
+# Setup virtual environment
+python3 -m venv venv
+source venv/bin/activate  # On Linux/macOS
+
+# Install dependencies
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# Run tests
+python -m pytest tests/ -v
+pytest tests/test_stage1.py -v  # Test specific stage
+
+# Run the full pipeline
+python src/main.py --mode full
+
+# Run individual stages
+python src/main.py --mode stage1  # Summarize data
+python src/main.py --mode stage2  # Generate task suggestions
+python src/main.py --mode stage3 --task-id T1  # Plan for task T1
+python src/main.py --mode stage4 --task-id T1  # Execute task T1
+
+# Run with verbose logging
+python src/main.py --mode full --verbose
+
+# Run specific modules directly
+python -m src.stage1.summarizer --data-dir data/raw --output-dir data/summaries
+python -m src.stage2.task_suggester --summaries-dir data/summaries
+```
+
+### Architecture
+
+The pipeline follows a stateless design where each stage writes artifacts to disk:
+
+**Stage 1: Summarizer**
+- Input: Raw CSV/JSON files in `data/raw/`
+- Output: JSON summaries in `data/summaries/`
+- Generates schema analysis, statistics, and candidate keys
+- Code: `src/stage1/summarizer.py`
+
+**Stage 2: Task Suggester**
+- Input: All summaries from Stage 1
+- Output: Task proposals in `data/tasks.json`
+- Proposes prediction, descriptive, and clustering tasks
+- Code: `src/stage2/task_suggester.py`
+
+**Stage 3: Planner**
+- Input: Selected task + raw data files
+- Output: Merged data in `data/intermediate/<task_id>_merged.parquet` and join plan JSON
+- Normalizes keys, merges files, engineers features (lags, rolling statistics)
+- Code: `src/stage3/planner.py`, `src/stage3/normalizer.py`
+
+**Stage 4: Executor**
+- Input: Task definition + merged data from Stage 3
+- Output: Metrics, predictions, model cards, and plots in `data/outputs/`
+- Trains models (Ridge, XGBoost), evaluates on holdout set, generates visualizations
+- Code: `src/stage4/executor.py`, `src/stage4/models.py`, `src/stage4/visualizer.py`
+
+**Verification System**
+- V1 (after Stage 1): Schema validation via `src/verifiers/schema_check.py`
+- V2 (after Stage 2): Human task selection
+- V3 (after Stage 3): Join cardinality and leakage checks via `src/verifiers/join_check.py`
+- V4 (after Stage 4): Metrics validation via `src/verifiers/metrics_check.py`
+
+### Key Design Principles
+
+1. **Statelessness**: Stages don't maintain internal state; all results persist to disk
+2. **Verification Gates**: Automated checks after each stage (configurable non-blocking)
+3. **Modularity**: Each stage can run independently
+4. **Reproducibility**: Same inputs always produce same outputs
+
+### Configuration
+
+- Pipeline settings: `config/pipeline_config.yaml`
+- API keys (optional): `.env` file (create from `config/.env.example`)
+- Application config: `src/config.py` (loads YAML + env vars)
+
+### Data Flow
+
+```
+data/raw/ → Stage 1 → data/summaries/ → Stage 2 → data/tasks.json
+                                              ↓
+data/outputs/ ← Stage 4 ← data/intermediate/ ← Stage 3
+```
+
+### Important Implementation Details
+
+- Time-based train/test splits for prediction tasks (train on ≤2020, test on >2020)
+- Feature engineering creates lag features and rolling statistics via pandas groupby
+- Join cardinality tracking prevents many-to-many explosions
+- Models: Ridge regression and XGBoost (configurable in pipeline_config.yaml)
+- Parquet format for intermediate storage (efficient compression)
+- Stage 1 can sample large files (set `sample_size` in config)
+
+## Local Deep Research Agent
+
+### Purpose
+A LangGraph-based conversational research agent that uses GraphRAG for knowledge graph search.
+
+### Development Commands
+
+```bash
+# Navigate to the research agent directory
+cd "Capstone-Project/local-deep-research"
+
+# Install uv (if not already installed)
+# Follow: https://docs.astral.sh/uv/getting-started/installation/
+
+# Setup environment variables
+touch .env
+# Add to .env:
+# OPENAI_API_KEY=<your_key>
+# LANGSMITH_API_KEY=<your_key>
+# LANGSMITH_TRACING=true
+# LANGSMITH_PROJECT="deep-agent"
+# GRAPHRAG_API_KEY=<your_openai_key>
+# GRAPHRAG_LLM_MODEL=gpt-4o-mini
+# GRAPHRAG_EMBEDDING_MODEL=text-embedding-3-small
+
+# Run the agent with uv
+uvx --refresh --from "langgraph-cli[inmem]" --with-editable . --python 3.11 langgraph dev --allow-blocking
+```
+
+### Architecture
+
+Built using LangGraph with a supervisor-worker pattern:
+
+**Main Components**
+- `src/agent.py`: Main agent logic with state machine (clarification → research question generation → supervisor → final report)
+- `src/supervisor.py`: Supervisor subgraph that coordinates research workers
+- `src/factory_research_agent.py`: Factory for creating specialized research agents
+- `src/kg_search_manager.py`: Knowledge graph search manager using GraphRAG
+- `src/tools.py`: Tool definitions for web search, document retrieval
+- `src/states.py`: State definitions for the agent workflow
+- `src/prompts.py`: Prompt templates for different agent stages
+- `src/configs.py`: Configuration management
+
+**Data Directory**
+All unstructured data (CSVs, documents) must reside in `data/` directory.
+
+**Key Dependencies**
+- LangGraph for agent orchestration
+- LangChain for LLM integration (OpenAI, Anthropic)
+- GraphRAG for knowledge graph construction and retrieval
+- Tavily for web search
+- Docker for GraphRAG backend
+
+### Agent Workflow
+
+1. **Clarify with user**: Optionally ask clarifying questions (if `allow_clarification` enabled)
+2. **Generate research question**: Create structured research questions
+3. **Supervisor**: Coordinate research workers to gather information
+4. **Final report**: Generate comprehensive report from gathered research
+
+## Project Structure Notes
+
+- The repository root is `Capstone Project/` (with space in name)
+- Main project code is in `Capstone-Project/` subdirectory
+- `.git` repository exists at `Capstone-Project/` level
+- Test files are located in `Capstone-Project/agentic-pipeline/tests/` (not created yet for local-deep-research)
+
+## Common Gotchas
+
+- **Paths with spaces**: Always quote paths when using bash commands (e.g., `cd "Capstone Project"`)
+- **Virtual environment**: Must activate venv before running pipeline commands
+- **Data directory**: Agentic pipeline expects data in `data/raw/` before running
+- **API keys**: Local deep research requires API keys; agentic pipeline works without them (uses rule-based heuristics)
+- **Python version**: Local deep research requires Python 3.11+; agentic pipeline works with 3.8+
